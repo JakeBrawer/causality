@@ -11,14 +11,16 @@ class SGD:
         self.learning_rate = learning_rate
         self.epochs        = epochs
 
-    def fit(self, Y, X):
+    def fit(self, Y, Y_pred, X):
+        X = np.array(X)
+        Y = np.array(Y)
         N          = float(len(Y))
         w1_current = self.curr_weights[0]
         w2_current = self.curr_weights[1]
 
         for i in range(self.epochs):
             # Y_pred = (m_current * X) + b_current
-            Y_pred = X.dot(self.curr_weights)
+            # Y_pred = X.dot(self.curr_weights)
             cost = sum([data**2 for data in (Y-Y_pred)]) / N
             rmse = sqrt(cost)
 
@@ -35,13 +37,12 @@ class SGD:
             return self.curr_weights, rmse
 
 
+if __name__ == '__main__':
+    sgd = SGD(.001, 1 )
 
-sgd = SGD(.01, 1 )
+    for i in range(0, 100):
+        X = np.random.randint(10, size=2)
+        Y = np.array([np.dot(X, np.array([11, 2]))])
 
-for i in range(0, 100):
-    X = np.random.randint(10, size=2)
-    Y = np.array([np.dot(X, np.array([11, 2]))])
-    print(Y)
-    
 
-    sgd.fit(Y,X)
+        sgd.fit(Y,X)
