@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from causalgraphicalmodels.csm import StructuralCausalModel, linear_model
-from .sgd import SGD
+from sgd import SGD
 
 DATA_FILE = "./training_data.csv"
 
@@ -112,31 +112,62 @@ def compare_scms(scm1, scm2):
 def online_learning_example(it):
 
     # Initialize weights to random value
-    weight_final_x    = np.random.randint(10, size =2)
-    weight_final_y    = np.random.randint(10, size =2)
+    weight_gt = [2, -3]
+    weight_final    = np.random.randint(-10, 10, size =2)
+    # weight_final = np.array([0, 2])
 
-    ground_truth_scm = StructuralCausalModel({
+    ground_truth_scm  = StructuralCausalModel({
         "init_x": lambda  n_samples: np.random.normal(loc = 8., scale=2.0, size=n_samples),
         "init_y": lambda  n_samples: np.random.normal(loc = 8., scale=2.0, size=n_samples),
         "push_x": lambda  n_samples: np.random.normal(loc = 0., scale=1.0, size=n_samples),
         "push_y": lambda  n_samples: np.random.normal(loc = 0., scale=1.0, size=n_samples),
-        "final_x":linear_model(["init_x", "dist_x"], [1, .1], noise_scale=.01) ,
-        "final_y":linear_model(["init_y", "dist_y"], [1, .1], noise_scale=.01) ,
+        "final_x":linear_model(["init_x", "push_x"], weight_gt, noise_scale=.1) ,
+        "final_y":linear_model(["init_y", "push_y"], weight_gt, noise_scale=.1) ,
     })
 
-    learned_scm = StructuralCausalModel({
-        "init_x": lambda  n_samples: np.random.normal(loc = 8., scale=2.0, size=n_samples),
-        "init_y": lambda  n_samples: np.random.normal(loc = 8., scale=2.0, size=n_samples),
-        "push_x": lambda  n_samples: np.random.normal(loc = 0., scale=1.0, size=n_samples),
-        "push_y": lambda  n_samples: np.random.normal(loc = 0., scale=1.0, size=n_samples),
-        "final_x":linear_model(["init_x", "dist_x"], weight_final_x, noise_scale=.01) ,
-        "final_y":linear_model(["init_y", "dist_y"], weight_final_y, noise_scale=.01) ,
-    })
 
-    df_gt                = ground_truth_scm.sample(n_samples =it)
-    intervention_vars = {"init_x": df_gt.final_x, "init_y":  df_gt.final_y,
-                         "push_x":  df_gt.push_x, "push_y": df_gt.push_y}
-    learned_scm_do    = do_multiple(list(intervention_vars), learned_scm)
+    df_gt = ground_truth_scm.sample(n_samples=it)
+    sgd   = SGD(.001, 1, init_weights=weight_final)
+    for i in range(it):
+        gt_init_x  = [ df_gt.init_x[i] ]
+        gt_init_y  = [ df_gt.init_y[i] ]
+        gt_push_x  = [ df_gt.push_x[i] ]
+        gt_push_y  = [ df_gt.push_y[i] ]
+        gt_final_x = [ df_gt.final_x[i] ]
+        gt_final_y = [ df_gt.final_y[i] ]
+
+        intervention_vars = {"init_x": gt_init_x, "init_y":  gt_init_y,
+                            "push_x":  gt_push_x, "push_y": gt_push_y}
+        pred_scm       = StructuralCausalModel({
+            "init_x": lambda  n_samples: np.random.normal(loc = 8., scale=2.0, size=n_samples),
+            "init_y": lambda  n_samples: np.random.normal(loc = 8., scale=2.0, size=n_samples),
+            "push_x": lambda  n_samples: np.random.normal(loc = 0., scale=3.0, size=n_samples),
+            "push_y": lambda  n_samples: np.random.normal(loc = 0., scale=3.0, size=n_samples),
+            "final_x":linear_model(["init_x", "push_x"], weight_final, noise_scale=.1) ,
+            "final_y":linear_model(["init_y", "push_y"], weight_final, noise_scale=.1) ,
+        })
+
+        pred_scm_do    = do_multiple(list(intervention_vars), pred_scm)
+        df_pred        = pred_scm_do.sample(n_samples=1,
+                                                  set_values=intervention_vars)
+
+        pred_final_x = df_pred.final_x
+        pred_final_y = df_pred.final_y
+
+        plt.plot(df_gt.init_x[i], df_gt.init_y[i], 'bo')
+        text = "True_weights: {}\n Predicted weights {}".format(weight_gt, weight_final)
+        plt.text(df_gt.init_x[i] * (1 + 0.01), df_gt.init_y[i] * (1 + 0.01) , text, fontsize=12)
+        # plt.plot(df_gt.final_x, df_gt.final_y, 'go')
+        plt.quiver(gt_init_x,gt_init_y, gt_final_x, gt_final_y, color="b")
+        plt.quiver(gt_init_x, gt_init_y, pred_final_x, pred_final_y, color="r")
+
+        weight_final, rmse_x = sgd.fit(gt_final_x, pred_final_x, [gt_init_x, gt_push_x])
+        # weight_final_y, rmse_y = sgd.fit(gt_final_y, gt_final_y)
+
+        plt.pause(1.)
+        plt.clf()
+    plt.show()
+
 
 
 
@@ -158,9 +189,9 @@ ds = scm.sample(n_samples=1000)
 # print(ds["init_x"].values)
 # print(get_coefficients(ds,"dist_x", ["goal_x", "goal_y", "init_x", "init_y"]))
 
-lin_scm = scm_to_linear_scm(scm, ds)
+# lin_scm = scm_to_linear_scm(scm, ds)
 
-simulate_pushes(lin_scm, 10)
+online_learning_example(20)
 
 # compare_scms(scm, lin_scm)
 
